@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRUD Data Mobil</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f4f9;
+        color: #333;
+      }
+      .container {
+        max-width: 800px;
+        margin: auto;
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1,
+      h2 {
+        text-align: center;
+        color: #444;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      th,
+      td {
+        padding: 12px;
+        border: 1px solid #ddd;
+        text-align: left;
+      }
+      th {
+        background-color: #007bff;
+        color: white;
+      }
+      tr:nth-child(even) {
+        background-color: #f2f2f2;
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      input[type="text"],
+      input[type="number"] {
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+      button {
+        padding: 10px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        color: white;
+      }
+      .btn-submit {
+        background-color: #28a745; /* Hijau */
+      }
+      .btn-edit {
+        background-color: #ffc107; /* Kuning */
+      }
+      .btn-delete {
+        background-color: #dc3545; /* Merah */
+      }
+      .upload-section {
+        margin-top: 30px;
+        padding: 20px;
+        border: 2px dashed #007bff;
+        border-radius: 8px;
+        text-align: center;
+      }
+      .upload-section input[type="file"] {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Manajemen Data Mobil</h1>
+
+      <h2>Formulir Mobil</h2>
+      <form id="carForm">
+        <input type="hidden" id="carId" />
+        <input
+          type="text"
+          id="brand"
+          placeholder="Merek Mobil (e.g., Toyota)"
+          required
+        />
+        <input
+          type="text"
+          id="model"
+          placeholder="Model Mobil (e.g., Avanza)"
+          required
+        />
+        <input
+          type="number"
+          id="price"
+          placeholder="Harga (e.g., 250000000)"
+          required
+        />
+        <button type="submit" class="btn-submit">Simpan</button>
+      </form>
+
+      <h2>Daftar Mobil</h2>
+      <table id="carTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Merek</th>
+            <th>Model</th>
+            <th>Harga</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="carList"></tbody>
+      </table>
+
+      <div class="upload-section">
+        <h3>Buka File (Upload CSV)</h3>
+        <p>
+          Pilih file CSV untuk memuat data mobil. Fitur ini memerlukan backend
+          untuk berfungsi penuh.
+        </p>
+        <input type="file" id="csvFile" accept=".csv" />
+      </div>
+    </div>
+
+    <script>
+      // --- Konfigurasi ---
+      const API_URL = "http://127.0.0.1:8000";
+
+      // --- DOM Elements ---
+      const carListElement = document.getElementById("carList");
+      const carForm = document.getElementById("carForm");
+      const carIdInput = document.getElementById("carId");
+      const brandInput = document.getElementById("brand");
+      const modelInput = document.getElementById("model");
+      const priceInput = document.getElementById("price");
+      const formButton = carForm.querySelector("button");
+      const csvFileInput = document.getElementById("csvFile");
+
+      let editingCarId = null;
+
+      // --- Functions ---
+
+      /**
+       * Mengambil dan merender daftar mobil dari API.
+       */
+      async function renderCars() {
+        try {
+          const response = await fetch(`${API_URL}/cars/`);
+          const cars = await response.json();
+
+          carListElement.innerHTML = ""; // Kosongkan tabel
+          if (cars.length === 0) {
+            carListElement.innerHTML =
+              '<tr><td colspan="5" style="text-align:center;">Tidak ada data mobil.</td></tr>';
+            return;
+          }
+
+          cars.forEach((car) => {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                    <td>${car.id}</td>
+                    <td>${car.brand}</td>
+                    <td>${car.model}</td>
+                    <td>Rp ${car.price.toLocaleString("id-ID")}</td>
+                    <td>
+                        <button class="btn-edit" onclick="editCar(${
+                          car.id
+                        })">Edit</button>
+                        <button class="btn-delete" onclick="deleteCar(${
+                          car.id
+                        })">Hapus</button>
+                    </td>
+                `;
+            carListElement.appendChild(row);
+          });
+        } catch (error) {
+          console.error("Error fetching cars:", error);
+          carListElement.innerHTML =
+            '<tr><td colspan="5" style="text-align:center;">Gagal memuat data.</td></tr>';
+        }
+      }
+
+      /**
+       * Menangani submit form untuk membuat atau memperbarui mobil.
+       */
+      carForm.addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        const carData = {
+          brand: brandInput.value,
+          model: modelInput.value,
+          price: parseInt(priceInput.value),
+        };
+
+        try {
+          let response;
+          if (editingCarId) {
+            // --- UPDATE (PUT request) ---
+            response = await fetch(`${API_URL}/cars/${editingCarId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(carData),
+            });
+            alert(`Mobil dengan ID ${editingCarId} berhasil diperbarui!`);
+          } else {
+            // --- CREATE (POST request) ---
+            response = await fetch(`${API_URL}/cars/`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(carData),
+            });
+            alert(`Mobil baru berhasil ditambahkan!`);
+          }
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Terjadi kesalahan");
+          }
+
+          resetForm();
+          renderCars();
+        } catch (error) {
+          console.error("Error submitting form:", error);
+          alert(`Gagal menyimpan data: ${error.message}`);
+        }
+      });
+
+      /**
+       * Mengisi form dengan data mobil yang akan diedit.
+       */
+      async function editCar(id) {
+        try {
+          const response = await fetch(`${API_URL}/cars/${id}`);
+          const car = await response.json();
+
+          editingCarId = id;
+          carIdInput.value = car.id;
+          brandInput.value = car.brand;
+          modelInput.value = car.model;
+          priceInput.value = car.price;
+
+          formButton.textContent = "Perbarui";
+          formButton.style.backgroundColor = "#ffc107";
+          window.scrollTo(0, 0);
+        } catch (error) {
+          console.error(`Error fetching car ${id}:`, error);
+        }
+      }
+
+      /**
+       * Menghapus mobil berdasarkan ID.
+       */
+      async function deleteCar(id) {
+        if (
+          confirm(`Apakah Anda yakin ingin menghapus mobil dengan ID ${id}?`)
+        ) {
+          try {
+            const response = await fetch(`${API_URL}/cars/${id}`, {
+              method: "DELETE",
+            });
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.detail || "Gagal menghapus");
+            }
+            alert(`Mobil dengan ID ${id} berhasil dihapus.`);
+            renderCars();
+          } catch (error) {
+            console.error("Error deleting car:", error);
+            alert(`Gagal menghapus: ${error.message}`);
+          }
+        }
+      }
+
+      /**
+       * Menangani upload file CSV.
+       */
+      csvFileInput.addEventListener("change", async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          const response = await fetch(`${API_URL}/upload-csv/`, {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+          if (!response.ok) {
+            throw new Error(result.detail || "Gagal mengunggah file.");
+          }
+
+          alert(result.message);
+          renderCars(); // Muat ulang daftar mobil setelah upload
+        } catch (error) {
+          console.error("Error uploading file:", error);
+          alert(`Gagal mengunggah file: ${error.message}`);
+        } finally {
+          csvFileInput.value = ""; // Reset input file
+        }
+      });
+
+      function resetForm() {
+        carForm.reset();
+        editingCarId = null;
+        carIdInput.value = "";
+        formButton.textContent = "Simpan";
+        formButton.style.backgroundColor = "#28a745";
+      }
+
+      // --- Initial Load ---
+      document.addEventListener("DOMContentLoaded", renderCars);
+    </script>
+  </body>
+</html>
