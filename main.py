@@ -15,16 +15,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# --- [EDIT] Tambahkan Konfigurasi CORS Middleware ---
-# Ini memungkinkan frontend (HTML/JS) untuk berkomunikasi dengan API ini.
-# origins = ["*"] berarti mengizinkan semua sumber. Untuk produksi, lebih baik
-# spesifik, contoh: ["http://localhost", "http://127.0.0.1:8000"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],  # Mengizinkan semua metode (GET, POST, PUT, DELETE)
-    allow_headers=["*"],  # Mengizinkan semua header
+    allow_headers=["*"],  
 )
 
 # ---- Model Data ----
@@ -143,7 +139,6 @@ async def upload_cars_csv(file: UploadFile = File(...)):
 
     return {"message": f"{loaded_count} mobil berhasil dimuat dari file {file.filename}."}
 
-# Jalankan server Uvicorn jika file ini dieksekusi secara langsung
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
